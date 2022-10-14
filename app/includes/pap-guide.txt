@@ -1,0 +1,336 @@
+and then, I am gong to request about integrate postaffiliatepro for cryprowire.vip to freelancer.
+Can you support him ?
+for example, I want to know the API you are using.
+for signup as new affiliater
+for check whether user already exist as affiliater
+for create commition data
+for get affiliate link
+==============================================================
+For the whole repeated procedures that use PAP API, I created a utility PHP file that have some helper functions.
+You just need to include this file at the beginning of your program.
+The file pap_helper.inc.php
+=====================================
+<?php
+require_once('PostAffiliatePro/PapApi.class.php'); //you can find these files in the archive ZIP file we have sent
+
+define("MERCHANT_USERNAME", "info@cryptowire.vip"); 
+define("MERCHANT_PASSWORD", "ipXVfB4d"); 
+define("PAP_URL", "http://cryptowire.postaffiliatepro.com/scripts/server.php");
+define("CAMPAIGN_ID", "89ab9105");
+define("COMMISSION_TYPE_ID", "hd5273sd");
+
+/*
+* Login PAP
+* @param $_pap_url : PAP URL
+* @param $_username : username used to login PAP
+* @param $_password : password used to login PAP
+* @param $_type : login type ("merchant" or "affiliate")
+* @return PAP login session on success, NULL on false
+*/
+function PapLogin($_pap_url, $_username, $_password, $_type){    
+
+    try {
+
+        if ($_type == "merchant") { //login as merchant
+        	$_merchant_session = new Pap_Api_Session($_pap_url); 
+	        if(!$_merchant_session->login($_username, $_password)) {
+	            //die("Cannot login. Message: ".$_merchant_session->getMessage());
+	            return;
+	        }
+	        return $_merchant_session;
+
+        } else if ($_type == "affiliate") { //login as affiliate
+        	$_aff_session = new Pap_Api_Session($_pap_url); 
+	        if(!$_aff_session->login($_username,$_password, Pap_Api_Session::AFFILIATE)) {
+	            //die("Cannot login. Message: ".$_aff_session->getMessage());
+	            return;        
+	            
+	        }
+	        return $_aff_session;
+	        
+        }
+        
+    } catch (Exception $e){
+        //die('Error: '.$e->getMessage());
+        return;
+        
+    }
+
+}
+
+/*
+* Get information of an Affiliate by username
+* @param $_username : username used to login PAP
+* @param $_merchant_session : merchant session object
+* @return an array of information of an Affiliate
+*/
+function GetInfoByUsername($_username, $_merchant_session) {
+	//$affiliate_user = array('userid' => '', 'refid' => '', 'error' => '');
+	$affiliate_user = array('username' => '', 'userid' => '', 'refid' => '', 'parentuserid' => '', 'first_name' => '', 'last_name' => '', 'error' => '');
+	$pap_user_check_request = new Pap_Api_AffiliatesGrid($_merchant_session);
+	//Filtering affiliate by username
+	$pap_user_check_request->addFilter('username', Gpf_Data_Filter::EQUALS, $_username);
+
+	// sets limit to 30 rows, offset to 0 (first row starts)
+	$pap_user_check_request->setLimit(0, 30);
+
+	// sets columns, use it only if you want retrieve other as default columns
+	$pap_user_check_request->addParam('columns', new Gpf_Rpc_Array(array(array('id'), array('refid'), array('userid'), 
+	array('username'), array('firstname'), array('lastname'), array('rstatus'), array('parentuserid'),
+	array('dateinserted'), array('salesCount'), array('clicksRaw'), array('clicksUnique'))));
+
+	// send request
+	try {
+		$pap_user_check_request->sendNow();
+		// request was successful, get the grid result
+		$grid = $pap_user_check_request->getGrid();
+
+		// get recordset from the grid
+		$pap_user_check_recordset = $grid->getRecordset();	
+		
+		if (!empty($pap_user_check_recordset)) {
+			foreach($pap_user_check_recordset as $rec) {
+				if ((trim($rec->get('userid')) != '')  && (trim($rec->get('refid')) != '')){					
+					$affiliate_user['username'] = $rec->get('username');
+					$affiliate_user['userid'] = $rec->get('userid');
+					$affiliate_user['refid'] = $rec->get('refid');
+					$affiliate_user['parentuserid'] = $rec->get('parentuserid');
+					$affiliate_user['first_name'] = $rec->get('firstname');
+					$affiliate_user['last_name'] = $rec->get('lastname');
+					break;
+				}
+				
+				//echo 'Affiliate userid: '.$rec->get('userid').', Affiliate name: '.$rec->get('firstname').' '.$rec->get('lastname'). ', refid = ' . $rec->get('refid') .'<br>';
+			}
+		}
+	} catch(Exception $e) {
+		//die("API call error: ".$e->getMessage());
+		////_log("PapUserCheck::API call error: ".$e->getMessage());
+		$affiliate_user['error'] = $e->getMessage();
+		return $affiliate_user;
+	}
+
+	
+	return $affiliate_user;
+}
+
+/*
+* Get Affiliate by Referal ID
+* @param $_refid : referal ID
+* @param $_merchant_session : merchant session
+* @return $affiliate_user object
+*/
+function GetUserIdByRefId($_refid, $_merchant_session) {
+	$affiliate_user = array('userid' => '', 'username' => '', 'refid' => '', 'error' => '');
+	$pap_user_check_request = new Pap_Api_AffiliatesGrid($_merchant_session);
+	//Filtering affiliate with refid
+	$pap_user_check_request->addFilter('refid', Gpf_Data_Filter::EQUALS, $_refid);
+
+	// sets limit to 30 rows, offset to 0 (first row starts)
+	$pap_user_check_request->setLimit(0, 30);
+
+	// sets columns, use it only if you want retrieve other as default columns
+	$pap_user_check_request->addParam('columns', new Gpf_Rpc_Array(array(array('id'), array('refid'), array('userid'), 
+	array('username'), array('firstname'), array('lastname'), array('rstatus'), array('parentuserid'),
+	array('dateinserted'), array('salesCount'), array('clicksRaw'), array('clicksUnique'))));
+
+	// send request
+	try {
+		$pap_user_check_request->sendNow();
+		// request was successful, get the grid result
+		$grid = $pap_user_check_request->getGrid();
+
+		// get recordset from the grid
+		$pap_user_check_recordset = $grid->getRecordset();	
+		
+		if (!empty($pap_user_check_recordset)) {
+			foreach($pap_user_check_recordset as $rec) {
+				if ((trim($rec->get('userid')) != '')  && (trim($rec->get('username')) != '')){
+					$affiliate_user['userid'] = $rec->get('userid');
+					$affiliate_user['refid'] = $rec->get('refid');
+					$affiliate_user['username'] = $rec->get('username');
+					break;
+				}				
+			}
+		}
+	} catch(Exception $e) {
+		//die("API call error: ".$e->getMessage());
+		$affiliate_user['error'] = $e->getMessage();
+		return $affiliate_user;
+	}
+
+	
+	return $affiliate_user;
+}
+
+?>
+
+=====================================
+
+
+1. Prepare neccessary things :
+(a). Set PAP neccessary JS on the web page (after body tag)
+<script type="text/javascript" id="pap_x2s6df8d" src="https://xexon.postaffiliatepro.com/scripts/3dy807jxhl"></script>
+<script type="text/javascript">
+	PostAffTracker.setAccountId('default1');
+	PostAffTracker.setParamNameUserId('aid');
+	try {
+		PostAffTracker.track();
+	} catch (err) { }
+</script>
+
+(b). Save Affiliate's Referal ID to website cookie:
+For example, if the URL with affiliate id like this :
+https://cryptowire.vip/?aid=xxxxxx
+or https://dashboard.cryptowire.vip/?aid=xxxxxx
+We have to get that aid value from the URL, save it as a cookie on the website cryptowire.vip like this :
+<?php
+if (isset($_GET['aid'])) {
+	if (trim($_GET['aid']) != "") {
+		$aid = trim($_GET['aid']);
+		if(!isset($_COOKIE['AffRefId'])) {
+			setcookie('AffRefId', $aid, time() + (86400 * 365 * 50), "/", ".cryptowire.vip");			
+			
+		} else {
+			setcookie('AffRefId', $aid, time() + (86400 * 365 * 50), "/", ".cryptowire.vip");
+			
+			
+		}
+	}
+}
+?>
+Now, a cookie with the name "AffRefId" has been created for cryptowire.vip domain.
+You can use this cookie later in your program to do things like sign up affiliate, and more.
+
+(c). When sign up a new Affiliate, API need a value called "VisitorId", in the web page (same page of (a)), that you will send user information for sign up,put the following code:
+<input type="hidden" id="papCookie" name="papCookie" />
+<script type="text/javascript">
+	PostAffTracker.writeCookieToCustomField('papCookie', '', '', false);
+</script>
+
+
+2. How to create (signup) a PAP a/c :
+This is the PHP script on the server side to register Affiliate based on user's data sent from web page.
+PAP API need the following fields to register a new Affiliate
+username(this is email address), firstname, lastname, password
+<?php
+require_once "pap_helper.inc.php";
+
+$email = isset($_POST['email'])?trim($_POST['email']):'';
+$firstname = isset($_POST['firstname'])?($_POST['firstname']):'';
+$lastname = isset($_POST['lastname'])?($_POST['lastname']):'';
+$password = isset($_POST['password'])?($_POST['password']):'';
+$visitor_id = isset($_POST['papCookie'])?($_POST['papCookie']):''; //this was prepared by step (1.c) above
+//PAP is automatically generates this PAPVisitorId in the website cookies.
+$pap_visitorId = (isset($_COOKIE['PAPVisitorId']))?htmlentities($_COOKIE['PAPVisitorId'], 3, 'UTF-8'):"";
+//We need visitor id for sign up API, so we have to make sure that we can always get this value (sometimes papCookie above is null for unknown reason, perhaps this is PAP bug)
+if ($visitor_id == '') {
+	if ($pap_visitorId != '') {
+		$visitor_id = $pap_visitorId;
+	}
+}
+//get Affiliate Referal ID we have set at step (1.b) above
+$refid = isset($_COOKIE['AffRefId'])?($_COOKIE['AffRefId']):'';
+
+//login as merchant
+$raw_pap_merchant_login_obj = PapLogin(PAP_URL, MERCHANT_USERNAME, MERCHANT_PASSWORD, "merchant");
+if ((!is_null($raw_pap_merchant_login_obj)) && (!empty($raw_pap_merchant_login_obj))) {
+
+	//fetch affiliate parent if have any
+	$affiliate_parent_user_id = "";	
+	$pap_affiliate_obj = GetUserIdByRefId($refid, $raw_pap_merchant_login_obj);
+	if ($pap_affiliate_obj['userid'] == '') {
+		//TODO, log to debug
+	} else {
+		//get the parent user id
+		$affiliate_parent_user_id = $pap_affiliate_obj['userid'];	
+	}
+	
+	//register PAP affiliate
+	$affiliate = new Pap_Api_Affiliate($raw_pap_merchant_login_obj);
+	$affiliate->setUsername($email);
+	$affiliate->setFirstname($firstname);
+	$affiliate->setLastname($lastname);
+	$affiliate->setNotificationEmail($email);
+	if ($affiliate_parent_user_id != "") {
+		$affiliate->setParentUserId($affiliate_parent_user_id);
+	}	
+	$affiliate->setPassword($password);
+	$affiliate->setVisitorId($visitor_id);
+	try {
+		if ($affiliate->add()) {
+			echo "Affiliate saved successfuly id: " . $affiliate->getUserid() . " / refid: " . $affiliate->getRefid();
+		} else {
+			echo "Cannot save affiliate: ".$affiliate->getMessage();
+		}
+	} catch (Exception $e) {
+		die ("Error while communicating with PAP: ".$e->getMessage());
+	}
+	
+} else {
+	die ("failed to login as merchant ! Cannot get userid of parent affiliate !");
+}
+
+
+3. How to check affiliate exist or not
+<?php
+require_once "pap_helper.inc.php";
+$pap_affiliate_login_obj = PapLogin(PAP_URL, $username, $password, "affiliate");
+if ((!is_null($pap_affiliate_login_obj)) && (!empty($pap_affiliate_login_obj))) {
+	echo "affiliate exist !";
+}
+?>
+
+4. How to add a commission / how to create affiliate links
+<?php
+require_once "pap_helper.inc.php";
+
+$sample_affiliate_link = "https://cryptowire.vip/?aid=";
+
+//username of the affiliate you want to add commission for
+$username = "emailaddress@gmail.com"; //replace this by your value
+//login as merchant
+$raw_pap_merchant_login_obj = PapLogin(PAP_URL, MERCHANT_USERNAME, MERCHANT_PASSWORD, "merchant");
+if ((!is_null($raw_pap_merchant_login_obj)) && (!empty($raw_pap_merchant_login_obj))) {
+	$pap_affiliate_obj = GetInfoByUsername($username, $raw_pap_merchant_login_obj);	
+	if (trim($pap_affiliate_obj['refid']) != '') { 
+	
+		//create affiliate link
+		$sample_affiliate_link .= trim($pap_affiliate_obj['refid']);
+		
+		if (trim($pap_affiliate_obj['parentuserid']) != '') {
+			
+			//Create new transaction (commission):
+			$transaction = new Pap_Api_Transaction($raw_pap_merchant_login_obj);
+
+			//Fill custom data:
+			$transaction->setCampaignid(CAMPAIGN_ID);
+			$transaction->setTotalCost(100); //replace this value by yours
+			$transaction->setCommTypeId(COMMISSION_TYPE_ID); //replace by your desired commission type id (find it in PAP Merchant site)
+			$transaction->setUserid($pap_affiliate_obj['parentuserid']);
+			$transaction->setOrderId($pap_affiliate_obj['username']);
+			$transaction->setProductId("Your Content");
+			$transaction->setData(1, $pap_affiliate_obj['first_name'] . " " . $pap_affiliate_obj['last_name']);			
+			//also count multi-tier commissions for parent affiliates
+			$transaction->setMultiTierCreation("Y");
+
+			//Adding transaction
+			if ($transaction->add()) {
+				echo $username . "::commission added ok for user id: " . $pap_affiliate_obj['parentuserid'] . " / transaction id: " . $transaction->getTransId();
+				
+			} else {
+				echo $username . "::commission added failed for user id: " . $pap_affiliate_obj['parentuserid'] . " / error message: " . $transaction->getMessage();
+			}
+		}				
+	} else {													
+		echo $username . " does not exist!";
+	}
+} else {
+	echo "failed to login as merchant!";
+}
+
+?>
+
+for more information about using PAP API, refer to this https://support.qualityunit.com/712031-API
+
+
